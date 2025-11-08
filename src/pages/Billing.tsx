@@ -26,19 +26,22 @@ const Billing = () => {
   const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
 
-  // Mock product database
+  // Mock product database with barcodes
   const mockProducts = [
-    { id: "1", name: "Tata Salt", price: 25, gst: 5 },
-    { id: "2", name: "Amul Milk 1L", price: 60, gst: 5 },
-    { id: "3", name: "Fortune Oil 1L", price: 180, gst: 18 },
-    { id: "4", name: "Britannia Bread", price: 40, gst: 5 },
-    { id: "5", name: "Parle-G Biscuits", price: 10, gst: 12 },
+    { id: "1", name: "Tata Salt", price: 25, gst: 5, barcode: "8901234567890" },
+    { id: "2", name: "Amul Milk 1L", price: 60, gst: 5, barcode: "8901234567891" },
+    { id: "3", name: "Fortune Oil 1L", price: 180, gst: 18, barcode: "8901234567892" },
+    { id: "4", name: "Britannia Bread", price: 40, gst: 5, barcode: "8901234567893" },
+    { id: "5", name: "Parle-G Biscuits", price: 10, gst: 12, barcode: "8901234567894" },
   ];
 
   const handleSearchProduct = (query?: string) => {
     const searchTerm = query || searchQuery;
     const product = mockProducts.find(
-      (p) => p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.id === searchTerm
+      (p) => 
+        p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        p.id === searchTerm ||
+        p.barcode === searchTerm
     );
 
     if (product) {
