@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Search, Plus, Trash2, ShoppingCart, CreditCard, Banknote, Smartphone } from "lucide-react";
+import { Search, Plus, Trash2, ShoppingCart, CreditCard, Banknote, Smartphone, ScanLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import DashboardLayout from "@/components/DashboardLayout";
 import InvoiceDialog from "@/components/InvoiceDialog";
+import BarcodeScanner from "@/components/BarcodeScanner";
 import { toast } from "sonner";
 
 interface CartItem {
@@ -23,6 +24,7 @@ const Billing = () => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "upi">("cash");
   const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   // Mock product database
   const mockProducts = [
@@ -102,6 +104,12 @@ const Billing = () => {
     setIsInvoiceOpen(false);
   };
 
+  const handleBarcodeScanned = (code: string) => {
+    setSearchQuery(code);
+    handleSearchProduct();
+    toast.success("Barcode scanned successfully!");
+  };
+
   const paymentMethods = [
     { id: "cash", label: "Cash", icon: Banknote },
     { id: "card", label: "Card", icon: CreditCard },
@@ -133,6 +141,10 @@ const Billing = () => {
                     className="pl-10"
                   />
                 </div>
+                <Button variant="outline" onClick={() => setIsScannerOpen(true)}>
+                  <ScanLine className="h-4 w-4 mr-2" />
+                  Scan
+                </Button>
                 <Button onClick={handleSearchProduct}>
                   <Plus className="h-4 w-4 mr-2" />
                   Add
@@ -275,6 +287,12 @@ const Billing = () => {
         total={calculateTotal()}
         paymentMethod={paymentMethod}
         onComplete={handleCompletePayment}
+      />
+
+      <BarcodeScanner
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScan={handleBarcodeScanned}
       />
     </DashboardLayout>
   );
