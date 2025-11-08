@@ -34,8 +34,9 @@ const BarcodeScanner = ({ onScan, onClose, isOpen }: BarcodeScannerProps) => {
       },
     },
     hints,
+    paused: !isOpen,
     onDecodeResult(result) {
-      if (!scanned) {
+      if (!scanned && isOpen) {
         setScanned(true);
         onScan(result.getText());
         setTimeout(() => {

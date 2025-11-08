@@ -35,9 +35,10 @@ const Billing = () => {
     { id: "5", name: "Parle-G Biscuits", price: 10, gst: 12 },
   ];
 
-  const handleSearchProduct = () => {
+  const handleSearchProduct = (query?: string) => {
+    const searchTerm = query || searchQuery;
     const product = mockProducts.find(
-      (p) => p.name.toLowerCase().includes(searchQuery.toLowerCase())
+      (p) => p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.id === searchTerm
     );
 
     if (product) {
@@ -106,8 +107,8 @@ const Billing = () => {
 
   const handleBarcodeScanned = (code: string) => {
     setSearchQuery(code);
-    handleSearchProduct();
-    toast.success("Barcode scanned successfully!");
+    handleSearchProduct(code);
+    toast.success(`Barcode detected: ${code}`);
   };
 
   const paymentMethods = [
@@ -145,7 +146,7 @@ const Billing = () => {
                   <ScanLine className="h-4 w-4 mr-2" />
                   Scan
                 </Button>
-                <Button onClick={handleSearchProduct}>
+                <Button onClick={() => handleSearchProduct()}>
                   <Plus className="h-4 w-4 mr-2" />
                   Add
                 </Button>
