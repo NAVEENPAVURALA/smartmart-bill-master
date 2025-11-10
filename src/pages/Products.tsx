@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Plus, Search, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import DashboardLayout from "@/components/DashboardLayout";
 import ProductDialog from "@/components/ProductDialog";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 export interface Product {
   id: string;
@@ -16,19 +19,64 @@ export interface Product {
   price: number;
   stock: number;
   barcode: string;
+  gst?: number;
 }
 
 const Products = () => {
-  const [products, setProducts] = useState<Product[]>([
-    { id: "1", name: "Tata Salt", category: "Grocery", price: 25, stock: 150, barcode: "8901234567890" },
-    { id: "2", name: "Amul Milk 1L", category: "Dairy", price: 60, stock: 80, barcode: "8901234567891" },
-    { id: "3", name: "Fortune Oil 1L", category: "Oil", price: 180, stock: 45, barcode: "8901234567892" },
-    { id: "4", name: "Britannia Bread", category: "Bakery", price: 40, stock: 120, barcode: "8901234567893" },
-    { id: "5", name: "Parle-G Biscuits", category: "Snacks", price: 10, stock: 200, barcode: "8901234567894" },
-  ]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
+  const { role, user } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (role && role !== "admin") {
+      toast.error("Access denied. Admin only.");
+      navigate("/dashboard");
+    }
+  }, [role, navigate]);
+
+  useEffect(() => {
+    fetchProducts();
+
+    // Set up realtime subscription
+    const channel = supabase
+      .channel('products-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'products'
+        },
+        () => {
+          fetchProducts();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const fetchProducts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setProducts(data || []);
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredProducts = products.filter(
     (product) =>
@@ -37,16 +85,43 @@ const Products = () => {
       product.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleSaveProduct = (product: Product) => {
-    if (editingProduct) {
-      setProducts(products.map((p) => (p.id === product.id ? product : p)));
-      toast.success("Product updated successfully");
-    } else {
-      setProducts([...products, { ...product, id: Date.now().toString() }]);
-      toast.success("Product added successfully");
+  const handleSaveProduct = async (product: Product) => {
+    try {
+      if (editingProduct) {
+        const { error } = await supabase
+          .from('products')
+          .update({
+            name: product.name,
+            category: product.category,
+            price: product.price,
+            stock: product.stock,
+            barcode: product.barcode,
+            gst: product.gst || 0,
+          })
+          .eq('id', product.id);
+
+        if (error) throw error;
+        toast.success("Product updated successfully");
+      } else {
+        const { error } = await supabase
+          .from('products')
+          .insert({
+            name: product.name,
+            category: product.category,
+            price: product.price,
+            stock: product.stock,
+            barcode: product.barcode,
+            gst: product.gst || 0,
+          });
+
+        if (error) throw error;
+        toast.success("Product added successfully");
+      }
+      setIsDialogOpen(false);
+      setEditingProduct(null);
+    } catch (error: any) {
+      toast.error(error.message);
     }
-    setIsDialogOpen(false);
-    setEditingProduct(null);
   };
 
   const handleEdit = (product: Product) => {
@@ -54,9 +129,18 @@ const Products = () => {
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    setProducts(products.filter((p) => p.id !== id));
-    toast.success("Product deleted successfully");
+  const handleDelete = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      toast.success("Product deleted successfully");
+    } catch (error: any) {
+      toast.error(error.message);
+    }
   };
 
   const getStockBadge = (stock: number) => {
@@ -64,6 +148,16 @@ const Products = () => {
     if (stock < 100) return <Badge className="bg-warning text-warning-foreground">Medium</Badge>;
     return <Badge className="bg-success text-success-foreground">In Stock</Badge>;
   };
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>

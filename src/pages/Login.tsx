@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ShoppingCart, User, Shield } from "lucide-react";
@@ -7,14 +7,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Login = () => {
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
   const [selectedRole, setSelectedRole] = useState<"admin" | "cashier" | null>(null);
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
+  const { signIn, signUp, user, role, loading } = useAuth();
 
-  const handleLogin = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (!loading && user && role) {
+      navigate("/dashboard");
+    }
+  }, [user, role, loading, navigate]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!selectedRole) {
@@ -22,18 +33,44 @@ const Login = () => {
       return;
     }
 
-    if (!username || !password) {
-      toast.error("Please enter username and password");
-      return;
-    }
+    setIsSubmitting(true);
 
-    // Mock authentication - in real app, this would validate against backend
-    localStorage.setItem("userRole", selectedRole);
-    localStorage.setItem("username", username);
-    
-    toast.success(`Welcome back, ${username}!`);
-    navigate("/dashboard");
+    try {
+      if (isSignUp) {
+        if (!fullName) {
+          toast.error("Please enter your full name");
+          return;
+        }
+        const { error } = await signUp(email, password, fullName, selectedRole);
+        if (error) {
+          toast.error(error.message);
+        } else {
+          toast.success("Account created successfully!");
+          navigate("/dashboard");
+        }
+      } else {
+        const { error } = await signIn(email, password);
+        if (error) {
+          toast.error(error.message);
+        } else {
+          toast.success("Logged in successfully!");
+          navigate("/dashboard");
+        }
+      }
+    } catch (error: any) {
+      toast.error(error.message || "An error occurred");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-accent/5 p-4">
@@ -58,11 +95,13 @@ const Login = () => {
 
         <Card className="shadow-xl border-border/50">
           <CardHeader>
-            <CardTitle>Welcome Back</CardTitle>
-            <CardDescription>Select your role and login to continue</CardDescription>
+            <CardTitle>{isSignUp ? "Create Account" : "Welcome Back"}</CardTitle>
+            <CardDescription>
+              {isSignUp ? "Sign up to get started" : "Select your role and login to continue"}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleLogin} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                   <Card
@@ -97,14 +136,28 @@ const Login = () => {
                 </motion.div>
               </div>
 
+              {isSignUp && (
+                <div className="space-y-2">
+                  <Label htmlFor="fullName">Full Name</Label>
+                  <Input
+                    id="fullName"
+                    type="text"
+                    placeholder="Enter your full name"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    required
+                  />
+                </div>
+              )}
+
               <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
+                <Label htmlFor="email">Email</Label>
                 <Input
-                  id="username"
-                  type="text"
-                  placeholder="Enter your username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  id="email"
+                  type="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   required
                 />
               </div>
@@ -118,12 +171,23 @@ const Login = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  minLength={6}
                 />
               </div>
 
-              <Button type="submit" className="w-full" size="lg">
-                Login
+              <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
+                {isSubmitting ? "Processing..." : isSignUp ? "Sign Up" : "Login"}
               </Button>
+
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => setIsSignUp(!isSignUp)}
+                  className="text-sm text-primary hover:underline"
+                >
+                  {isSignUp ? "Already have an account? Sign In" : "Don't have an account? Sign Up"}
+                </button>
+              </div>
             </form>
           </CardContent>
         </Card>

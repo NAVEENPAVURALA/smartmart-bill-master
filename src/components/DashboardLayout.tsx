@@ -1,4 +1,4 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -11,10 +11,12 @@ import {
   Moon,
   Sun,
   ShoppingBag,
+  User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 import { useTheme } from "next-themes";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -25,19 +27,36 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { theme, setTheme } = useTheme();
+  const { user, role, signOut, loading } = useAuth();
 
-  const handleLogout = () => {
-    localStorage.removeItem("userRole");
-    localStorage.removeItem("username");
-    toast.success("Logged out successfully");
-    navigate("/");
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate("/");
+    }
+  }, [user, loading, navigate]);
+
+  const handleLogout = async () => {
+    await signOut();
   };
 
-  const menuItems = [
-    { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
-    { icon: Package, label: "Products", path: "/products" },
-    { icon: ShoppingCart, label: "Billing", path: "/billing" },
-  ];
+  // Role-based menu items
+  const menuItems = role === "admin" 
+    ? [
+        { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
+        { icon: Package, label: "Products", path: "/products" },
+        { icon: ShoppingCart, label: "Billing", path: "/billing" },
+      ]
+    : [
+        { icon: ShoppingCart, label: "Billing", path: "/billing" },
+      ];
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -75,6 +94,10 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             </nav>
 
             <div className="flex items-center gap-2">
+              <Badge variant="outline" className="gap-1">
+                <User className="h-3 w-3" />
+                {role === "admin" ? "Admin" : "Cashier"}
+              </Badge>
               <Button
                 variant="ghost"
                 size="icon"

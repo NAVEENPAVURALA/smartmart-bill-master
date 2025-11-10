@@ -1,15 +1,16 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Search, Plus, Trash2, ShoppingCart, CreditCard, Banknote, Smartphone, ScanLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import DashboardLayout from "@/components/DashboardLayout";
 import InvoiceDialog from "@/components/InvoiceDialog";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface CartItem {
   id: string;
@@ -25,26 +26,67 @@ const Billing = () => {
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "upi">("cash");
   const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [products, setProducts] = useState<any[]>([]);
+  const { user } = useAuth();
 
-  // Mock product database with barcodes
-  const mockProducts = [
-    { id: "1", name: "Tata Salt", price: 25, gst: 5, barcode: "8901234567890" },
-    { id: "2", name: "Amul Milk 1L", price: 60, gst: 5, barcode: "8901234567891" },
-    { id: "3", name: "Fortune Oil 1L", price: 180, gst: 18, barcode: "8901234567892" },
-    { id: "4", name: "Britannia Bread", price: 40, gst: 5, barcode: "8901234567893" },
-    { id: "5", name: "Parle-G Biscuits", price: 10, gst: 12, barcode: "8901234567894" },
-  ];
+  useEffect(() => {
+    fetchProducts();
 
-  const handleSearchProduct = (query?: string) => {
+    // Set up realtime subscription for product stock updates
+    const channel = supabase
+      .channel('billing-products')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'products'
+        },
+        (payload) => {
+          setProducts(prev => 
+            prev.map(p => p.id === payload.new.id ? payload.new : p)
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const fetchProducts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*');
+
+      if (error) throw error;
+      setProducts(data || []);
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  const handleSearchProduct = async (query?: string) => {
     const searchTerm = query || searchQuery;
-    const product = mockProducts.find(
+    
+    if (!searchTerm) {
+      toast.error("Please enter a product name or barcode");
+      return;
+    }
+
+    const product = products.find(
       (p) => 
         p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        p.id === searchTerm ||
         p.barcode === searchTerm
     );
 
     if (product) {
+      if (product.stock <= 0) {
+        toast.error("Product out of stock");
+        return;
+      }
       addToCart(product);
       setSearchQuery("");
     } else {
@@ -52,17 +94,27 @@ const Billing = () => {
     }
   };
 
-  const addToCart = (product: { id: string; name: string; price: number; gst: number }) => {
+  const addToCart = (product: any) => {
     const existingItem = cart.find((item) => item.id === product.id);
 
     if (existingItem) {
+      if (existingItem.quantity >= product.stock) {
+        toast.error("Not enough stock available");
+        return;
+      }
       setCart(
         cart.map((item) =>
           item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
         )
       );
     } else {
-      setCart([...cart, { ...product, quantity: 1 }]);
+      setCart([...cart, { 
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        gst: product.gst || 0,
+        quantity: 1 
+      }]);
     }
     toast.success(`${product.name} added to cart`);
   };
@@ -72,10 +124,18 @@ const Billing = () => {
   };
 
   const updateQuantity = (id: string, quantity: number) => {
+    const product = products.find(p => p.id === id);
+    
     if (quantity < 1) {
       removeFromCart(id);
       return;
     }
+
+    if (product && quantity > product.stock) {
+      toast.error("Not enough stock available");
+      return;
+    }
+
     setCart(cart.map((item) => (item.id === id ? { ...item, quantity } : item)));
   };
 
@@ -102,16 +162,58 @@ const Billing = () => {
     setIsInvoiceOpen(true);
   };
 
-  const handleCompletePayment = () => {
-    toast.success("Payment completed successfully!");
-    setCart([]);
-    setIsInvoiceOpen(false);
+  const handleCompletePayment = async () => {
+    if (!user) {
+      toast.error("Please login to complete payment");
+      return;
+    }
+
+    try {
+      // Create sale record
+      const { data: saleData, error: saleError } = await supabase
+        .from('sales')
+        .insert({
+          cashier_id: user.id,
+          payment_method: paymentMethod,
+          subtotal: calculateSubtotal(),
+          gst_amount: calculateGST(),
+          total: calculateTotal(),
+        })
+        .select()
+        .single();
+
+      if (saleError) throw saleError;
+
+      // Create sale items (stock will be automatically reduced by trigger)
+      const saleItems = cart.map(item => ({
+        sale_id: saleData.id,
+        product_id: item.id,
+        product_name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        gst: item.gst,
+      }));
+
+      const { error: itemsError } = await supabase
+        .from('sale_items')
+        .insert(saleItems);
+
+      if (itemsError) throw itemsError;
+
+      toast.success("Payment completed successfully!");
+      setCart([]);
+      setIsInvoiceOpen(false);
+      
+      // Refresh products to get updated stock
+      fetchProducts();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to complete payment");
+    }
   };
 
   const handleBarcodeScanned = (code: string) => {
     setSearchQuery(code);
     handleSearchProduct(code);
-    toast.success(`Barcode detected: ${code}`);
   };
 
   const paymentMethods = [
