@@ -14,6 +14,120 @@ export type Database = {
   }
   public: {
     Tables: {
+      customers: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          lifetime_points: number
+          name: string
+          phone: string
+          total_points: number
+          total_spent: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          lifetime_points?: number
+          name: string
+          phone: string
+          total_points?: number
+          total_spent?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          lifetime_points?: number
+          name?: string
+          phone?: string
+          total_points?: number
+          total_spent?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      loyalty_tiers: {
+        Row: {
+          color: string
+          created_at: string
+          discount_percentage: number
+          id: string
+          min_points: number
+          name: string
+          points_multiplier: number
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          discount_percentage?: number
+          id?: string
+          min_points: number
+          name: string
+          points_multiplier?: number
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          discount_percentage?: number
+          id?: string
+          min_points?: number
+          name?: string
+          points_multiplier?: number
+        }
+        Relationships: []
+      }
+      loyalty_transactions: {
+        Row: {
+          created_at: string
+          customer_id: string
+          description: string | null
+          id: string
+          points_earned: number | null
+          points_redeemed: number | null
+          sale_id: string | null
+          transaction_type: string
+        }
+        Insert: {
+          created_at?: string
+          customer_id: string
+          description?: string | null
+          id?: string
+          points_earned?: number | null
+          points_redeemed?: number | null
+          sale_id?: string | null
+          transaction_type: string
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string
+          description?: string | null
+          id?: string
+          points_earned?: number | null
+          points_redeemed?: number | null
+          sale_id?: string | null
+          transaction_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loyalty_transactions_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loyalty_transactions_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           barcode: string
@@ -126,6 +240,7 @@ export type Database = {
         Row: {
           cashier_id: string
           created_at: string
+          customer_id: string | null
           gst_amount: number
           id: string
           payment_method: string
@@ -135,6 +250,7 @@ export type Database = {
         Insert: {
           cashier_id: string
           created_at?: string
+          customer_id?: string | null
           gst_amount: number
           id?: string
           payment_method: string
@@ -144,13 +260,22 @@ export type Database = {
         Update: {
           cashier_id?: string
           created_at?: string
+          customer_id?: string | null
           gst_amount?: number
           id?: string
           payment_method?: string
           subtotal?: number
           total?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "sales_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -178,6 +303,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calculate_points: {
+        Args: { amount: number; multiplier?: number }
+        Returns: number
+      }
+      get_customer_tier: {
+        Args: { customer_points: number }
+        Returns: {
+          color: string
+          discount_percentage: number
+          points_multiplier: number
+          tier_name: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

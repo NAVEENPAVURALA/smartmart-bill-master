@@ -1,13 +1,16 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Search, Plus, Trash2, ShoppingCart, CreditCard, Banknote, Smartphone, ScanLine } from "lucide-react";
+import { Search, Plus, Trash2, ShoppingCart, CreditCard, Banknote, Smartphone, ScanLine, Award, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 import DashboardLayout from "@/components/DashboardLayout";
 import InvoiceDialog from "@/components/InvoiceDialog";
 import BarcodeScanner from "@/components/BarcodeScanner";
+import CustomerDialog from "@/components/CustomerDialog";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -26,7 +29,10 @@ const Billing = () => {
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "upi">("cash");
   const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
+  const [customer, setCustomer] = useState<any>(null);
+  const [pointsToRedeem, setPointsToRedeem] = useState(0);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -150,8 +156,31 @@ const Billing = () => {
     }, 0);
   };
 
+  const calculateTierDiscount = () => {
+    if (!customer?.tier) return 0;
+    const subtotal = calculateSubtotal();
+    return (subtotal * customer.tier.discount_percentage) / 100;
+  };
+
+  const calculatePointsDiscount = () => {
+    // 100 points = ₹10 discount
+    return (pointsToRedeem / 100) * 10;
+  };
+
   const calculateTotal = () => {
-    return calculateSubtotal() + calculateGST();
+    const subtotal = calculateSubtotal();
+    const gst = calculateGST();
+    const tierDiscount = calculateTierDiscount();
+    const pointsDiscount = calculatePointsDiscount();
+    return subtotal + gst - tierDiscount - pointsDiscount;
+  };
+
+  const calculatePointsEarned = () => {
+    if (!customer) return 0;
+    const multiplier = customer.tier?.points_multiplier || 1.0;
+    const total = calculateTotal();
+    // 1 point per ₹10 spent
+    return Math.floor((total / 10) * multiplier);
   };
 
   const handleCheckout = () => {
@@ -174,6 +203,7 @@ const Billing = () => {
         .from('sales')
         .insert({
           cashier_id: user.id,
+          customer_id: customer?.id || null,
           payment_method: paymentMethod,
           subtotal: calculateSubtotal(),
           gst_amount: calculateGST(),
@@ -200,8 +230,36 @@ const Billing = () => {
 
       if (itemsError) throw itemsError;
 
+      // Handle loyalty transactions if customer exists
+      if (customer) {
+        // Redeem points if any
+        if (pointsToRedeem > 0) {
+          await supabase.from('loyalty_transactions').insert({
+            customer_id: customer.id,
+            sale_id: saleData.id,
+            points_redeemed: pointsToRedeem,
+            transaction_type: 'redeem',
+            description: `Redeemed ${pointsToRedeem} points for sale ${saleData.id}`,
+          });
+        }
+
+        // Award points
+        const pointsEarned = calculatePointsEarned();
+        if (pointsEarned > 0) {
+          await supabase.from('loyalty_transactions').insert({
+            customer_id: customer.id,
+            sale_id: saleData.id,
+            points_earned: pointsEarned,
+            transaction_type: 'earn',
+            description: `Earned ${pointsEarned} points from sale ${saleData.id}`,
+          });
+        }
+      }
+
       toast.success("Payment completed successfully!");
       setCart([]);
+      setCustomer(null);
+      setPointsToRedeem(0);
       setIsInvoiceOpen(false);
       
       // Refresh products to get updated stock
@@ -331,6 +389,107 @@ const Billing = () => {
         </div>
 
         <div className="space-y-6">
+          {/* Loyalty Customer Card */}
+          <Card className="border-border/50">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Award className="h-5 w-5 text-primary" />
+                  Loyalty Customer
+                </span>
+                {customer && (
+                  <Button variant="ghost" size="sm" onClick={() => setCustomer(null)}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {customer ? (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="font-semibold">{customer.name}</h3>
+                      <p className="text-sm text-muted-foreground">{customer.phone}</p>
+                    </div>
+                    {customer.tier && (
+                      <Badge
+                        variant="secondary"
+                        style={{
+                          backgroundColor: `${customer.tier.color}20`,
+                          color: customer.tier.color,
+                          borderColor: customer.tier.color,
+                        }}
+                      >
+                        {customer.tier.tier_name}
+                      </Badge>
+                    )}
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Available Points</span>
+                      <span className="font-semibold">{customer.total_points}</span>
+                    </div>
+                    {customer.tier && customer.tier.discount_percentage > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Tier Discount</span>
+                        <span className="font-semibold text-green-600">
+                          {customer.tier.discount_percentage}%
+                        </span>
+                      </div>
+                    )}
+                    {cart.length > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Points to Earn</span>
+                        <span className="font-semibold text-primary">
+                          +{calculatePointsEarned()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {customer.total_points >= 100 && (
+                    <div className="space-y-2 pt-2 border-t">
+                      <Label className="text-sm">Redeem Points (100 pts = ₹10)</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          type="number"
+                          min="0"
+                          max={Math.min(customer.total_points, Math.floor(calculateTotal() * 10))}
+                          step="100"
+                          value={pointsToRedeem}
+                          onChange={(e) => setPointsToRedeem(Math.min(parseInt(e.target.value) || 0, customer.total_points))}
+                          placeholder="0"
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setPointsToRedeem(Math.min(customer.total_points, Math.floor(calculateTotal() * 10)))}
+                        >
+                          Max
+                        </Button>
+                      </div>
+                      {pointsToRedeem > 0 && (
+                        <p className="text-xs text-green-600">
+                          -₹{calculatePointsDiscount().toFixed(2)} discount
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <Button variant="outline" className="w-full" onClick={() => setIsCustomerDialogOpen(true)}>
+                  <Award className="h-4 w-4 mr-2" />
+                  Add Loyalty Customer
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Payment Summary Card */}
           <Card className="border-border/50 sticky top-6">
             <CardHeader>
               <CardTitle>Payment Summary</CardTitle>
@@ -345,6 +504,18 @@ const Billing = () => {
                   <span className="text-muted-foreground">GST</span>
                   <span className="font-medium">₹{calculateGST().toFixed(2)}</span>
                 </div>
+                {customer?.tier && calculateTierDiscount() > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Tier Discount</span>
+                    <span className="font-medium text-green-600">-₹{calculateTierDiscount().toFixed(2)}</span>
+                  </div>
+                )}
+                {pointsToRedeem > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Points Discount</span>
+                    <span className="font-medium text-green-600">-₹{calculatePointsDiscount().toFixed(2)}</span>
+                  </div>
+                )}
                 <Separator />
                 <div className="flex justify-between">
                   <span className="font-semibold">Total</span>
@@ -399,6 +570,12 @@ const Billing = () => {
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
         onScan={handleBarcodeScanned}
+      />
+
+      <CustomerDialog
+        open={isCustomerDialogOpen}
+        onOpenChange={setIsCustomerDialogOpen}
+        onSelectCustomer={setCustomer}
       />
     </DashboardLayout>
   );
