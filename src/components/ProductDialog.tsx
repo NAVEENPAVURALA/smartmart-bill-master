@@ -20,6 +20,7 @@ const ProductDialog = ({ open, onOpenChange, onSave, product }: ProductDialogPro
     price: 0,
     stock: 0,
     barcode: "",
+    gst: 0,
   });
 
   useEffect(() => {
@@ -33,6 +34,7 @@ const ProductDialog = ({ open, onOpenChange, onSave, product }: ProductDialogPro
         price: 0,
         stock: 0,
         barcode: "",
+        gst: 0,
       });
     }
   }, [product]);
@@ -90,14 +92,28 @@ const ProductDialog = ({ open, onOpenChange, onSave, product }: ProductDialogPro
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="barcode">Barcode</Label>
-            <Input
-              id="barcode"
-              value={formData.barcode}
-              onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
-              required
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="barcode">Barcode</Label>
+              <Input
+                id="barcode"
+                value={formData.barcode}
+                onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="gst">GST (%)</Label>
+              <Input
+                id="gst"
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                value={formData.gst || 0}
+                onChange={(e) => setFormData({ ...formData, gst: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
