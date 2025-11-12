@@ -13,7 +13,7 @@ interface ProductDialogProps {
 }
 
 const ProductDialog = ({ open, onOpenChange, onSave, product }: ProductDialogProps) => {
-  const [formData, setFormData] = useState<Product>({
+  const [formData, setFormData] = useState<any>({
     id: "",
     name: "",
     category: "",
@@ -21,6 +21,11 @@ const ProductDialog = ({ open, onOpenChange, onSave, product }: ProductDialogPro
     stock: 0,
     barcode: "",
     gst: 0,
+    cost_price: 0,
+    min_stock_level: 10,
+    expiry_date: null,
+    brand: "",
+    sku: "",
   });
 
   useEffect(() => {
@@ -35,6 +40,11 @@ const ProductDialog = ({ open, onOpenChange, onSave, product }: ProductDialogPro
         stock: 0,
         barcode: "",
         gst: 0,
+        cost_price: 0,
+        min_stock_level: 10,
+        expiry_date: null,
+        brand: "",
+        sku: "",
       });
     }
   }, [product]);

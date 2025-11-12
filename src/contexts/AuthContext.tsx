@@ -3,7 +3,7 @@ import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 
-type UserRole = "admin" | "cashier" | null;
+type UserRole = "admin" | "manager" | "cashier" | null;
 
 interface AuthContextType {
   user: User | null;
@@ -99,7 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await supabase.from("user_roles").insert({
         user_id: data.user.id,
         role: selectedRole,
-      });
+      } as any);
     }
 
     return { error };

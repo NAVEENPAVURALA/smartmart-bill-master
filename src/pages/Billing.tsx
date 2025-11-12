@@ -270,7 +270,7 @@ const Billing = () => {
   };
 
   const handleBarcodeScanned = (code: string) => {
-    setSearchQuery(code);
+    setIsScannerOpen(false);
     handleSearchProduct(code);
   };
 

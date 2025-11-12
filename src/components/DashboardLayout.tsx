@@ -46,6 +46,17 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         { icon: Package, label: "Products", path: "/products" },
         { icon: ShoppingCart, label: "Billing", path: "/billing" },
         { icon: User, label: "Customers", path: "/customers" },
+        { icon: Package, label: "Stock", path: "/stock" },
+        { icon: Package, label: "Discounts", path: "/discounts" },
+        { icon: Package, label: "Reports", path: "/reports" },
+      ]
+    : role === "manager"
+    ? [
+        { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
+        { icon: Package, label: "Products", path: "/products" },
+        { icon: ShoppingCart, label: "Billing", path: "/billing" },
+        { icon: User, label: "Customers", path: "/customers" },
+        { icon: Package, label: "Reports", path: "/reports" },
       ]
     : [
         { icon: ShoppingCart, label: "Billing", path: "/billing" },
